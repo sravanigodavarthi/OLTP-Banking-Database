@@ -77,7 +77,7 @@ def create_schemas_and_tables(conn):
                         amount NUMERIC(10,2) NOT NULL,
                         transaction_date timestamp NOT NULL,
                         account_id INT NOT NULL,
-                        employee_id INT NOT NULL,
+                        employee_id INT,
                         CONSTRAINT transaction_pkey PRIMARY KEY (transaction_id),
                         CONSTRAINT account_fkey FOREIGN KEY (account_id)
                             REFERENCES finance.account (account_id) MATCH SIMPLE
