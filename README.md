@@ -78,33 +78,33 @@ In databases, constraints are rules applied to data columns to ensure data integ
 
 The finance.transfer procedure encapsulates the logic for secure and reliable fund transfers between accounts (sender_id and receiver_id). It ensures `transactional integrity` by either completing all operations successfully or rolling back completely in case of failure. The procedure employs robust exception handling to manage unexpected issues and maintains `atomicity`, treating all database changes as a single unit of work, thus adhering to `ACID` properties.
 
-        CREATE OR REPLACE PROCEDURE finance.transfer(
-        	IN sender_id integer,
-        	IN receiver_id integer,
-        	IN amount numeric,
-            IN employee_id integer
-            )
-        LANGUAGE 'plpgsql'
-        AS $$
-                DECLARE
-                    rollback_message TEXT := 'Transaction rolled back: Insufficient funds';
-                    commit_message TEXT := 'Transaction committed successfully';
-                BEGIN
-                    IF (SELECT current_balance FROM finance.account WHERE account_id = sender_id) < amount THEN
-                    RAISE EXCEPTION '%', rollback_message;
-                    ELSE
-                        UPDATE finance.account SET current_balance = current_balance - amount WHERE account_id = sender_id;
-                        UPDATE finance.account SET current_balance = current_balance + amount WHERE account_id = receiver_id;
-                        INSERT INTO finance.transaction (account_id, transaction_type, amount, employee_id) VALUES (sender_id, 'WITHDRAWAL', amount, employee_id);
-                        INSERT INTO finance.transaction (account_id, transaction_type, amount, employee_id) VALUES (receiver_id, 'DEPOSIT', amount, employee_id);
-                    END IF;
-                EXCEPTION
-                    WHEN OTHERS THEN
-                    -- Rollback the transaction
-                    RAISE EXCEPTION 'Error transferring funds: %', SQLERRM;
-                    ROLLBACK;
-                END;
-        $$;
+    CREATE OR REPLACE PROCEDURE finance.transfer(
+        IN sender_id integer,
+        IN receiver_id integer,
+        IN amount numeric,
+        IN employee_id integer
+        )
+    LANGUAGE 'plpgsql'
+    AS $$
+            DECLARE
+                rollback_message TEXT := 'Transaction rolled back: Insufficient funds';
+                commit_message TEXT := 'Transaction committed successfully';
+            BEGIN
+                IF (SELECT current_balance FROM finance.account WHERE account_id = sender_id) < amount THEN
+                RAISE EXCEPTION '%', rollback_message;
+                ELSE
+                    UPDATE finance.account SET current_balance = current_balance - amount WHERE account_id = sender_id;
+                    UPDATE finance.account SET current_balance = current_balance + amount WHERE account_id = receiver_id;
+                    INSERT INTO finance.transaction (account_id, transaction_type, amount, employee_id) VALUES (sender_id, 'WITHDRAWAL', amount, employee_id);
+                    INSERT INTO finance.transaction (account_id, transaction_type, amount, employee_id) VALUES (receiver_id, 'DEPOSIT', amount, employee_id);
+                END IF;
+            EXCEPTION
+                WHEN OTHERS THEN
+                -- Rollback the transaction
+                RAISE EXCEPTION 'Error transferring funds: %', SQLERRM;
+                ROLLBACK;
+            END;
+    $$;
         
 ## Creating and utilizing triggers for automated actions
 
@@ -116,51 +116,96 @@ In this project, the trigger function `employee_salary_update_func()` is designe
 
 * `employee_salary_update table` captures the details of any salary changes, including the old and new salaries and the date of the chan
 
-        CREATE TABLE IF NOT EXISTS human_resource.employee_salary_update
-        (
-            log_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
-            employee_id integer NOT NULL,
-            first_name VARCHAR(50),
-            last_name VARCHAR(50),
-            old_salary numeric(10,2) NOT NULL,
-            incremented_salary numeric(10,2) NOT NULL,
-            incremented_on date NOT NULL,
-            CONSTRAINT employee_salary_update_pkey PRIMARY KEY (log_id)
-        );
+      CREATE TABLE IF NOT EXISTS human_resource.employee_salary_update
+      (
+          log_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+          employee_id integer NOT NULL,
+          first_name VARCHAR(50),
+          last_name VARCHAR(50),
+          old_salary numeric(10,2) NOT NULL,
+          incremented_salary numeric(10,2) NOT NULL,
+          incremented_on date NOT NULL,
+          CONSTRAINT employee_salary_update_pkey PRIMARY KEY (log_id)
+      );
 
 2. **Creating the Trigger Function**
 
 * This function compares the old and new salary values. If they are different, it logs the change in the `employee_salary_update table`.
 
-        CREATE OR REPLACE FUNCTION human_resource.employee_salary_update_func()
-            RETURNS trigger
-            LANGUAGE plpgsql
-            AS $$
-                BEGIN
-                    IF NEW.salary <> OLD.salary THEN
-                        INSERT INTO human_resource.employee_salary_update (employee_id, first_name, last_name, old_salary, incremented_salary, incremented_on)
-                        VALUES (OLD.employee_id, OLD.first_name, OLD.last_name, OLD.salary, NEW.salary, now());
-                    END IF;
-                    RETURN NEW;
-                END;
-            $$;
+      CREATE OR REPLACE FUNCTION human_resource.employee_salary_update_func()
+          RETURNS trigger
+          LANGUAGE plpgsql
+          AS $$
+              BEGIN
+                  IF NEW.salary <> OLD.salary THEN
+                      INSERT INTO human_resource.employee_salary_update (employee_id, first_name, last_name, old_salary, incremented_salary, incremented_on)
+                      VALUES (OLD.employee_id, OLD.first_name, OLD.last_name, OLD.salary, NEW.salary, now());
+                  END IF;
+                  RETURN NEW;
+              END;
+          $$;
 
 3. **Creating the Trigger**
 
 * This trigger ensures that the `employee_salary_update_func` function is called automatically whenever the salary column of the employee table is updated.
 
-        CREATE TRIGGER employee_salary_update_trigger
-            AFTER UPDATE OF salary ON human_resource.employee
-            FOR EACH ROW
-            EXECUTE FUNCTION human_resource.employee_salary_update_func();
+      CREATE TRIGGER employee_salary_update_trigger
+          AFTER UPDATE OF salary ON human_resource.employee
+          FOR EACH ROW
+          EXECUTE FUNCTION human_resource.employee_salary_update_func();
 
 4. **Executing an Update to Fire the Trigger**
 
 * This update statement triggers the `employee_salary_update_func` function, which logs the salary change in the `employee_salary_update` table.
 
-        UPDATE human_resource.employee
-        SET salary = 90000
-        WHERE first_name = 'John' AND last_name = 'Doe';
+      UPDATE human_resource.employee
+      SET salary = 90000
+      WHERE first_name = 'John' AND last_name = 'Doe';
 
+## Creating Views for Simplified Data Retrieval
+Views provide an organized way to query and retrieve detailed information from multiple related tables within the finance and human_resource schemas.
+* View to get detailed account information including customer details
+  
+      CREATE OR REPLACE VIEW finance.account_details AS
+      SELECT 
+        account.account_id,
+        account.account_holder,
+        account.current_balance,
+        customer.customer_id,
+        customer.customer_type
+      FROM 
+        finance.account
+      JOIN 
+        finance.customer ON account.customer_id = customer.customer_id;
 
+* View to get detailed transaction information linked with account details
+  
+      CREATE OR REPLACE VIEW finance.transaction_details AS
+      SELECT 
+        account.account_id,
+        account.customer_id,
+        transaction.transaction_id,
+        transaction.transaction_date,
+        transaction.amount,
+        transaction.transaction_type
+      FROM 
+        finance.transaction
+      JOIN 
+        finance.account ON account.account_id = transaction.account_id;
+
+* View to get detailed employee information along with their department details
+
+      CREATE OR REPLACE VIEW human_resource.employee_details AS
+      SELECT 
+          e.employee_id,
+          e.first_name,
+          e.last_name,
+          e.hire_date,
+          e.salary,
+          d.department_name,
+          d.department_id
+      FROM 
+          human_resource.employee e
+      JOIN 
+          human_resource.department d ON e.department_id = d.department_id;
 
