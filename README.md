@@ -209,3 +209,5 @@ Views provide an organized way to query and retrieve detailed information from m
       JOIN 
           human_resource.department d ON e.department_id = d.department_id;
 
+**Note:**
+The procedures, triggers, views, and indexing SQL queries are directly executed using the PostgreSQL GUI.
