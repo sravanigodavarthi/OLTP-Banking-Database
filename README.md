@@ -108,5 +108,59 @@ The finance.transfer procedure encapsulates the logic for secure and reliable fu
         
 ## Creating and utilizing triggers for automated actions
 
+Triggers are powerful tools in databases that help automate tasks, enforce data integrity, and implement complex business rules by executing predefined actions in response to specific events.
+
+In this project, the trigger function `employee_salary_update_func()` is designed to insert a record into the `employee_salary_update` table whenever an employee's salary is updated, serving an auditing purpose.
+
+1. **Creating the Audit Table**
+
+* `employee_salary_update table` captures the details of any salary changes, including the old and new salaries and the date of the chan
+
+        CREATE TABLE IF NOT EXISTS human_resource.employee_salary_update
+        (
+            log_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+            employee_id integer NOT NULL,
+            first_name VARCHAR(50),
+            last_name VARCHAR(50),
+            old_salary numeric(10,2) NOT NULL,
+            incremented_salary numeric(10,2) NOT NULL,
+            incremented_on date NOT NULL,
+            CONSTRAINT employee_salary_update_pkey PRIMARY KEY (log_id)
+        );
+
+2. **Creating the Trigger Function**
+
+* This function compares the old and new salary values. If they are different, it logs the change in the `employee_salary_update table`.
+
+        CREATE OR REPLACE FUNCTION human_resource.employee_salary_update_func()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+                BEGIN
+                    IF NEW.salary <> OLD.salary THEN
+                        INSERT INTO human_resource.employee_salary_update (employee_id, first_name, last_name, old_salary, incremented_salary, incremented_on)
+                        VALUES (OLD.employee_id, OLD.first_name, OLD.last_name, OLD.salary, NEW.salary, now());
+                    END IF;
+                    RETURN NEW;
+                END;
+            $$;
+
+3. **Creating the Trigger**
+
+* This trigger ensures that the `employee_salary_update_func` function is called automatically whenever the salary column of the employee table is updated.
+
+        CREATE TRIGGER employee_salary_update_trigger
+            AFTER UPDATE OF salary ON human_resource.employee
+            FOR EACH ROW
+            EXECUTE FUNCTION human_resource.employee_salary_update_func();
+
+4. **Executing an Update to Fire the Trigger**
+
+* This update statement triggers the `employee_salary_update_func` function, which logs the salary change in the `employee_salary_update` table.
+
+        UPDATE human_resource.employee
+        SET salary = 90000
+        WHERE first_name = 'John' AND last_name = 'Doe';
+
 
 
