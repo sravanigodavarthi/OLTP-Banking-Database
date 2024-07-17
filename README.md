@@ -73,3 +73,40 @@ In databases, constraints are rules applied to data columns to ensure data integ
   * `chk_positive_balance` on `finance.account(current_balance)` ensures that the balance is non-negative.
   * `chk_non_negative_amount` on `finance.transaction(amount)` ensures that the transaction amount is positive.
   * `chk_salary_positive` on `human_resource.employee(salary)` ensures that the salary is positive.
+
+## Implementing transaction management with rollbacks
+
+The finance.transfer procedure encapsulates the logic for secure and reliable fund transfers between accounts (sender_id and receiver_id). It ensures `transactional integrity` by either completing all operations successfully or rolling back completely in case of failure. The procedure employs robust exception handling to manage unexpected issues and maintains `atomicity`, treating all database changes as a single unit of work, thus adhering to `ACID` properties.
+
+        CREATE OR REPLACE PROCEDURE finance.transfer(
+        	IN sender_id integer,
+        	IN receiver_id integer,
+        	IN amount numeric,
+            IN employee_id integer
+            )
+        LANGUAGE 'plpgsql'
+        AS $$
+                DECLARE
+                    rollback_message TEXT := 'Transaction rolled back: Insufficient funds';
+                    commit_message TEXT := 'Transaction committed successfully';
+                BEGIN
+                    IF (SELECT current_balance FROM finance.account WHERE account_id = sender_id) < amount THEN
+                    RAISE EXCEPTION '%', rollback_message;
+                    ELSE
+                        UPDATE finance.account SET current_balance = current_balance - amount WHERE account_id = sender_id;
+                        UPDATE finance.account SET current_balance = current_balance + amount WHERE account_id = receiver_id;
+                        INSERT INTO finance.transaction (account_id, transaction_type, amount, employee_id) VALUES (sender_id, 'WITHDRAWAL', amount, employee_id);
+                        INSERT INTO finance.transaction (account_id, transaction_type, amount, employee_id) VALUES (receiver_id, 'DEPOSIT', amount, employee_id);
+                    END IF;
+                EXCEPTION
+                    WHEN OTHERS THEN
+                    -- Rollback the transaction
+                    RAISE EXCEPTION 'Error transferring funds: %', SQLERRM;
+                    ROLLBACK;
+                END;
+        $$;
+        
+## Creating and utilizing triggers for automated actions
+
+
+
